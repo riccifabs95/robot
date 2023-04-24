@@ -1,24 +1,43 @@
-# Python program to explain cv2.imshow() method
+import pyspin
+from pyspin import PySpin
 
-# importing cv2
-import cv2
+# Get system
+system = PySpin.System.GetInstance()
 
-# path
-path = r'C:\Users\faricci\OneDrive - Fondazione Istituto Italiano Tecnologia\Desktop\robot-1\input\image_2.jpg'
+# Get camera list
+cam_list = system.GetCameras()
 
-# Reading an image in default mode
-image = cv2.imread(path)
+# Figure out which is primary and secondary (usually webcam is primary and Flea3 is secondary)
+cam = cam_list.GetByIndex(0)
 
-# Window name in which image is displayed
-window_name = 'image'
+# Initialize camera
+cam.Init()
 
-# Using cv2.imshow() method
-# Displaying the image
-cv2.imshow(window_name, image)
+# Set acquisition mode
+cam.AcquisitionMode.SetValue(PySpin.AcquisitionMode_SingleFrame)
 
-# waits for user to press any key
-# (this is necessary to avoid Python kernel form crashing)
-cv2.waitKey(0)
+# Start acquisition
+cam.BeginAcquisition()
 
-# closing all open windows
-cv2.destroyAllWindows()
+# Acquire images
+image_primary = cam.GetNextImage()
+width = image_primary.GetWidth()
+height = image_primary.GetHeight()
+print ("width: " + str(width) + ", height: " + str(height))
+
+# Pixel array (NumPy array)
+image_array = image_primary.GetData()
+
+# Save images
+image_primary.Save('prime.jpg')
+
+# Stop acquisition
+cam.EndAcquisition()
+
+# De-initialize
+cam.DeInit()
+
+# Clear references to images and cameras
+del image_primary
+del cam
+del cam_list

@@ -7,7 +7,7 @@ contour detection.
 import cv2
 
 # read the image
-image = cv2.imread('../../input/image_1.jpg')
+image = cv2.imread(r"C:\Users\faricci\OneDrive - Fondazione Istituto Italiano Tecnologia\Desktop\robot-1\input\image_1.jpg")
 
 # B, G, R channel splitting
 blue, green, red = cv2.split(image)
