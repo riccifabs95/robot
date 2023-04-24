@@ -2,15 +2,15 @@ from __future__ import print_function
 from pypylon import pylon
 from pypylon import genicam
 import cv2 as cv
-import argparse
-
 import time
+
 backSub = cv.createBackgroundSubtractorMOG2()
 try:
     imageWindow = pylon.PylonImageWindow()
     imageWindow.Create(1)
     # Create an instant camera object with the camera device found first.
-    camera = pylon.InstantCamera(pylon.TlFactory.GetInstance().CreateFirstDevice())
+    camera = pylon.InstantCamera(
+        pylon.TlFactory.GetInstance().CreateFirstDevice())
 
     # Print the model name of the camera.
     print("Using device ", camera.GetDeviceInfo().GetModelName())
@@ -19,20 +19,27 @@ try:
     # The camera device is parameterized with a default configuration which
     # sets up free-running continuous acquisition.
     camera.StartGrabbingMax(10000, pylon.GrabStrategy_LatestImageOnly)
+    converter = pylon.ImageFormatConverter()
 
-    while camera.IsGrabbing():
+    # converting to opencv bgr format
+    converter.OutputPixelFormat = pylon.PixelType_BGR8packed
+    converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
+
+   while camera.IsGrabbing():
         # Wait for an image and then retrieve it. A timeout of 5000 ms is used.
-        grabResult = camera.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
+        grabResult = camera.RetrieveResult(
+            5000, pylon.TimeoutHandling_ThrowException)
 
         # Image grabbed successfully?
         if grabResult.GrabSucceeded():
-                frame=grabResult
-                fgMask = backSub.apply(frame)
-                cv.rectangle(frame, (10, 2), (100,20), (255,255,255), -1)
-                cv.imshow('Frame', frame)
-                cv.imshow('FG Mask', fgMask)
+            frame = grabResult
+            fgMask = backSub.apply(frame)
+            cv.rectangle(frame, (10, 2), (100, 20), (255, 255, 255), -1)
+            cv.imshow('Frame', frame)
+            cv.imshow('FG Mask', fgMask)
         else:
-            print("Error: ",grabResult.ErrorCode)  # grabResult.ErrorDescription does not work properly in python could throw UnicodeDecodeError
+            # grabResult.ErrorDescription does not work properly in python could throw UnicodeDecodeError
+            print("Error: ", grabResult.ErrorCode)
             grabResult.Release()
             time.sleep(0.05)
 
