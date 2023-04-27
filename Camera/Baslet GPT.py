@@ -1,63 +1,74 @@
 import cv2
 from pypylon import pylon
+import numpy as np
 
-# Set up the camera
+# Connect to the first available camera
 camera = pylon.InstantCamera(pylon.TlFactory.GetInstance().CreateFirstDevice())
+
+# Set camera parameters
 camera.Open()
-
-# Set up the camera properties
 camera.PixelFormat = "Mono8"
-camera.GainAuto = "Off"
-camera.ExposureAuto = "Off"
-camera.ExposureTime = 10000
 
-# Define the region of interest (ROI)
-x, y, w, h = cv2.selectROI("Select ROI", camera.GrabOne().Array)
-cv2.destroyAllWindows()
+# Create window for selecting ROI
+cv2.namedWindow("Select ROI", cv2.WINDOW_NORMAL)
 
-# Start the video capture
+# Select region of interest
 camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+grab_result = camera.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
+if grab_result.GrabSucceeded():
+    img = grab_result.Array
+    roi = cv2.selectROI("Select ROI", img)
+    cv2.destroyWindow("Select ROI")
 
-# Process the frames
+    # Set region of interest as image mask
+    x, y, w, h = roi
+    mask = np.zeros((camera.Height.Value, camera.Width.Value), dtype=np.uint8)
+    mask[y:y+h, x:x+w] = 255
+else:
+    raise RuntimeError("Failed to grab initial frame.")
+
+# Start grabbing images
+
 while camera.IsGrabbing():
-    grabResult = camera.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
+    # Wait for the next image
+    grab_result = camera.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
 
-    if grabResult.GrabSucceeded():
-        # Convert the frame to grayscale
-        frame = grabResult.Array
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # Check if image was successfully retrieved
+    if grab_result.GrabSucceeded():
+        # Get image as a numpy array
+        img = grab_result.Array
 
-        # Crop the frame to the ROI
-        cropped = gray[y:y+h, x:x+w]
+        # Apply mask to image
+        img = cv2.bitwise_and(img, img, mask=mask)
 
-        # Threshold the frame to separate the foreground from the background
-        _, thresh = cv2.threshold(cropped, 127, 255, cv2.THRESH_BINARY)
+        # Threshold image to separate foreground and background
+        _, thresh = cv2.threshold(img, 50, 255, cv2.THRESH_BINARY)
 
-        # Find the contours in the thresholded frame
+        # Find contours in image
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        # Find the largest contour (assuming it is the mouse)
-        if len(contours) > 0:
-            maxContour = max(contours, key=cv2.contourArea)
-            M = cv2.moments(maxContour)
+        # Draw bounding box and calculate center of each contour
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area < 100:
+                continue
+            x, y, w, h = cv2.boundingRect(contour)
+            cx = x + w // 2
+            cy = y + h // 2
+            cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 2)
+            cv2.circle(img, (cx, cy), 2, (0, 0, 255), -1)
 
-            if M["m00"] > 0:
-                # Calculate the center of the contour
-                cx = int(M["m10"] / M["m00"])
-                cy = int(M["m01"] / M["m00"])
+        # Display image
+        cv2.imshow("Image", img)
+        key = cv2.waitKey(1)
 
-                # Draw a circle at the center of the contour
-                cv2.circle(frame, (cx+x, cy+y), 5, (0, 255, 0), -1)
-
-                # Display the frame
-                cv2.imshow("Frame", frame)
-
-        # Wait for a key press and exit if 'q' is pressed
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        # Exit on ESC key press
+        if key == 27:
             break
 
-    grabResult.Release()
+    # Release grab result
+    grab_result.Release()
 
-# Stop the video capture and close all windows
+# Stop grabbing images and close window
 camera.StopGrabbing()
 cv2.destroyAllWindows()

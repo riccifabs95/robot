@@ -19,6 +19,24 @@ try:
     # The camera device is parameterized with a default configuration which
     # sets up free-running continuous acquisition.
     camera.StartGrabbingMax(10000, pylon.GrabStrategy_LatestImageOnly)
+    
+    # Create window for selecting ROI
+    cv.namedWindow("Select ROI", cv.WINDOW_NORMAL)
+
+    # Select region of interest
+    grab_result = camera.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
+    if grab_result.GrabSucceeded():
+        img = grab_result.Array
+        roi = cv.selectROI("Select ROI", img)
+        cv.destroyWindow("Select ROI")
+
+        # Set region of interest as image mask
+        x, y, w, h = roi
+        mask = np.zeros((camera.Height.Value, camera.Width.Value), dtype=np.uint8)
+        mask[y:y+h, x:x+w] = 255
+    else:
+        raise RuntimeError("Failed to grab initial frame.")
+
     converter = pylon.ImageFormatConverter()
 
     # converting to opencv bgr format
@@ -32,18 +50,31 @@ try:
         if grabResult.GrabSucceeded():
             image = converter.Convert(grabResult)
             img = image.GetArray()
+            img = cv.bitwise_and(img, img, mask=mask)
             assert img is not None, "file could not be read, check with os.path.exists()"
             ret,img=cv.threshold(img,10,255,cv.THRESH_BINARY)
             img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
             #img = backSub.apply(img)
             contours,hieararchy = cv.findContours(img, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-            
-            cv.drawContours(img, contours, -1, (0, 255, 0), 3)
-
+            i=0
+            for contour in contours:
+                area = cv.contourArea(contour)
+                if area < 10000:
+                    continue
+                if area > 20000:
+                    continue
+                x, y, w, h = cv.boundingRect(contour)
+                cx = x + w // 2
+                cy = y + h // 2
+                cv.circle(img, (cx, cy), 2, (50, 255, 255), 2)
+                i=i+1
+            print("Find objects: ", i)
+            print("coordinates:",cx,cy)
             cv.imshow('Contours', img)
             k = cv.waitKey(1)
             if k == 27:            
                 grabResult.Release()
+                break
         else:
             # grabResult.ErrorDescription does not work properly in python could throw UnicodeDecodeError
             print("Error: ", grabResult.ErrorCode)
